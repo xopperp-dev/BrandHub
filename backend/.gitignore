@@ -1,3 +1,5 @@
 backup_*.sql
 .env.production
 venv/
+
+.env
