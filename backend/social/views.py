@@ -20,8 +20,13 @@ from .publisher import publish_post
 logger = logging.getLogger(__name__)
 
 
+from rest_framework.exceptions import PermissionDenied
+
 def get_org(request):
-    return request.user.organization
+    org = request.user.organization
+    if org is None:
+        raise PermissionDenied("Your account has no organization assigned.")
+    return org
 
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
