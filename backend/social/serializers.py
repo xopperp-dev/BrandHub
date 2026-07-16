@@ -47,9 +47,9 @@ class ClientSerializer(serializers.ModelSerializer):
         return obj.accounts.filter(is_connected=True).count()
 
     def create(self, validated_data):
-        # Auto-create all 4 platform slots on client creation
+        # Auto-create all platform slots on client creation
         client = Client.objects.create(**validated_data)
-        for platform in ['facebook', 'instagram', 'linkedin', 'x']:
+        for platform in ['facebook', 'instagram', 'linkedin', 'x', 'reddit', 'youtube', 'pinterest', 'tumblr']:
             SocialAccount.objects.create(client=client, platform=platform)
         return client
 
