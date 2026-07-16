@@ -15,6 +15,10 @@ const platformLabels = {
     instagram: 'Instagram',
     linkedin: 'LinkedIn',
     x: 'X (Twitter)',
+    youtube: 'YouTube',
+    reddit: 'Reddit',
+    pinterest: 'Pinterest',
+    tumblr: 'Tumblr',
 };
 
 const platformColors = {
@@ -22,6 +26,10 @@ const platformColors = {
     instagram: '#E1306C',
     linkedin: '#0A66C2',
     x: '#ffffff',
+    youtube: '#FF0000',
+    reddit: '#FF4500',
+    pinterest: '#E60023',
+    tumblr: '#36465D',
 };
 
 // ── Facebook / Instagram OAuth Modal ─────────────────────────────────────────
@@ -295,6 +303,234 @@ function FacebookOAuthModal({ client, account, onClose, onSaved }) {
     );
 }
 
+// ── Generic single-step OAuth modal (Reddit / YouTube) ───────────────────────
+// Unlike Facebook, these platforms have no "pick a page" step — the backend's
+// <platform>_oauth_save endpoint only needs { state } and resolves the account
+// directly from the cached OAuth result.
+
+const OAUTH_CONFIG = {
+    reddit: {
+        base: 'reddit',
+        messageType: 'REDDIT_OAUTH_DONE',
+        brandColor: '#FF4500',
+        cta: 'Continue with Reddit',
+        description: "Click below to log in with Reddit and authorize BrandHub to post on this account's behalf.",
+    },
+    youtube: {
+        base: 'youtube',
+        messageType: 'YT_OAUTH_DONE',
+        brandColor: '#FF0000',
+        cta: 'Continue with Google',
+        description: 'Click below to sign in with the Google account that owns the YouTube channel you want to connect.',
+    },
+    pinterest: {
+        base: 'pinterest',
+        messageType: 'PINTEREST_OAUTH_DONE',
+        brandColor: '#E60023',
+        cta: 'Continue with Pinterest',
+        description: "Click below to log in with Pinterest and authorize BrandHub to create pins on this account's behalf.",
+    },
+    tumblr: {
+        base: 'tumblr',
+        messageType: 'TUMBLR_OAUTH_DONE',
+        brandColor: '#36465D',
+        cta: 'Continue with Tumblr',
+        description: "Click below to log in with Tumblr and authorize BrandHub to post to this account's primary blog.",
+    },
+};
+
+function SimpleOAuthModal({ client, account, onClose, onSaved }) {
+    const [step, setStep] = useState('idle'); // idle | opening | waiting | saving | success | error
+    const [stateKey, setStateKey] = useState('');
+    const [errMsg, setErrMsg] = useState('');
+    const pollRef = useRef(null);
+    const popupRef = useRef(null);
+
+    const cfg = OAUTH_CONFIG[account.platform];
+    const platformName = platformLabels[account.platform];
+    const platformColor = platformColors[account.platform];
+
+    const stopPolling = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+
+    const saveAccount = async (finishedState) => {
+        setStep('saving');
+        try {
+            const res = await fetch(`/api/oauth/${cfg.base}/save/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('bh_access')}`,
+                },
+                body: JSON.stringify({ state: finishedState }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to save.');
+            setStep('success');
+            setTimeout(() => { onSaved(data.account); onClose(); }, 1200);
+        } catch (e) {
+            setErrMsg(e.message || 'Could not save connection.');
+            setStep('error');
+        }
+    };
+
+    // Listen for postMessage from popup
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.data?.type !== cfg.messageType) return;
+            if (!e.data.success) {
+                stopPolling();
+                setErrMsg(e.data.error || `${platformName} login failed.`);
+                setStep('error');
+                return;
+            }
+            setStep('waiting');
+        };
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, [cfg.messageType, platformName]);
+
+    // Poll status after popup closes
+    useEffect(() => {
+        if (step !== 'waiting' || !stateKey) return;
+        pollRef.current = setInterval(async () => {
+            try {
+                const res = await fetch(
+                    `/api/oauth/${cfg.base}/status/${stateKey}/`,
+                    { headers: { Authorization: `Bearer ${localStorage.getItem('bh_access')}` } }
+                );
+                const data = await res.json();
+                if (data.pending) return;
+                stopPolling();
+                if (data.success) {
+                    saveAccount(stateKey);
+                } else {
+                    setErrMsg(data.error || 'Something went wrong.');
+                    setStep('error');
+                }
+            } catch {
+                stopPolling();
+                setErrMsg('Could not check OAuth status.');
+                setStep('error');
+            }
+        }, 1500);
+        return stopPolling;
+    }, [step, stateKey]);
+
+    const handleStart = async () => {
+        setStep('opening');
+        setErrMsg('');
+        try {
+            const res = await fetch(
+                `/api/oauth/${cfg.base}/start/?client_id=${client.id}&account_id=${account.id}`,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('bh_access')}` } }
+            );
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to start OAuth.');
+
+            setStateKey(data.state);
+
+            const w = 600, h = 700;
+            const left = window.screenX + (window.outerWidth - w) / 2;
+            const top = window.screenY + (window.outerHeight - h) / 2;
+            popupRef.current = window.open(
+                data.oauth_url,
+                `${cfg.base}_oauth`,
+                `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`
+            );
+
+            setStep('waiting');
+        } catch (e) {
+            setErrMsg(e.message || `Could not start ${platformName} login.`);
+            setStep('error');
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-sm shadow-2xl">
+
+                <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                            style={{ background: platformColor + '22' }}>
+                            <PlatformIcon platform={account.platform} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-white">Connect {platformName}</p>
+                            <p className="text-xs text-slate-500">{client.name}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-surface-hover transition-all">
+                        <X size={15} />
+                    </button>
+                </div>
+
+                <div className="p-5">
+                    {step === 'idle' && (
+                        <div className="space-y-4">
+                            <p className="text-sm text-slate-400 leading-relaxed">{cfg.description}</p>
+                            <button
+                                onClick={handleStart}
+                                className="w-full py-2.5 rounded-xl font-semibold text-sm text-white transition-all flex items-center justify-center gap-2"
+                                style={{ background: cfg.brandColor }}
+                            >
+                                {cfg.cta}
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'opening' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <Loader2 size={22} className="text-brand-400 animate-spin" />
+                            <p className="text-sm text-white">Opening {platformName} login…</p>
+                        </div>
+                    )}
+
+                    {step === 'waiting' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <Loader2 size={22} className="text-brand-400 animate-spin" />
+                            <p className="text-sm text-white">Waiting for {platformName} login…</p>
+                            <p className="text-xs text-slate-500">Complete the login in the popup window</p>
+                            <button onClick={() => { stopPolling(); setStep('idle'); }}
+                                className="text-xs text-slate-600 hover:text-slate-400 mt-1">Cancel</button>
+                        </div>
+                    )}
+
+                    {step === 'saving' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <Loader2 size={22} className="text-brand-400 animate-spin" />
+                            <p className="text-sm text-white">Saving…</p>
+                        </div>
+                    )}
+
+                    {step === 'success' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <CheckCircle2 size={26} className="text-emerald-400" />
+                            <p className="text-sm text-white font-medium">Connected!</p>
+                        </div>
+                    )}
+
+                    {step === 'error' && (
+                        <div className="space-y-3">
+                            <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                                {errMsg}
+                            </div>
+                            <button onClick={() => setStep('idle')}
+                                className="w-full py-2.5 rounded-xl bg-surface-hover border border-surface-border text-sm text-slate-300 hover:text-white transition-all">
+                                Try Again
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ── Manual token modal (LinkedIn / X) ────────────────────────────────────────
 
 const MANUAL_HELP = {
@@ -432,6 +668,9 @@ function ManualTokenModal({ client, account, onClose, onSaved }) {
 export default function ConnectModal({ client, account, onClose, onSaved }) {
     if (account.platform === 'facebook' || account.platform === 'instagram') {
         return <FacebookOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
+    }
+    if (account.platform === 'reddit' || account.platform === 'youtube' || account.platform === 'pinterest' || account.platform === 'tumblr') {
+        return <SimpleOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
     }
     return <ManualTokenModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
 }

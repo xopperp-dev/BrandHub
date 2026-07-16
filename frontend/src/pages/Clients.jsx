@@ -13,6 +13,10 @@ const platformLabels = {
   instagram: 'Instagram',
   linkedin: 'LinkedIn',
   x: 'X (Twitter)',
+  youtube: 'YouTube',
+  reddit: 'Reddit',
+  pinterest: 'Pinterest',
+  tumblr: 'Tumblr',
 };
 
 const platformColors = {
@@ -20,6 +24,10 @@ const platformColors = {
   instagram: '#E1306C',
   linkedin: '#0A66C2',
   x: '#ffffff',
+  youtube: '#FF0000',
+  reddit: '#FF4500',
+  pinterest: '#E60023',
+  tumblr: '#36465D',
 };
 
 // Modal: Disconnect confirmation

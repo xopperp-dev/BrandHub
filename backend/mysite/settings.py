@@ -149,6 +149,26 @@ META_APP_ID     = config('META_APP_ID', default='')
 META_APP_SECRET = config('META_APP_SECRET', default='')
 META_GRAPH_API_BASE = f'https://graph.facebook.com/{META_GRAPH_API_VERSION}'
 
+# ── Reddit OAuth ───────────────────────────────────────────────────────────────
+# Create at: https://www.reddit.com/prefs/apps  (type: web app)
+REDDIT_CLIENT_ID     = config('REDDIT_CLIENT_ID', default='')
+REDDIT_CLIENT_SECRET = config('REDDIT_CLIENT_SECRET', default='')
+
+# ── YouTube / Google OAuth ─────────────────────────────────────────────────────
+# Create at: https://console.cloud.google.com  → Credentials → OAuth Client ID
+GOOGLE_CLIENT_ID     = config('GOOGLE_CLIENT_ID', default='')
+GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
+
+# ── Pinterest OAuth ────────────────────────────────────────────────────────────
+# Create at: https://developers.pinterest.com  → Apps → Connect app
+PINTEREST_CLIENT_ID     = config('PINTEREST_CLIENT_ID', default='')
+PINTEREST_CLIENT_SECRET = config('PINTEREST_CLIENT_SECRET', default='')
+
+# ── Tumblr OAuth ───────────────────────────────────────────────────────────────
+# Create at: https://www.tumblr.com/oauth/apps
+TUMBLR_CLIENT_ID     = config('TUMBLR_CLIENT_ID', default='')
+TUMBLR_CLIENT_SECRET = config('TUMBLR_CLIENT_SECRET', default='')
+
 # ── Token Encryption ──────────────────────────────────────────────────────────
 # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY = os.environ.get('BRANDHUB_ENCRYPTION_KEY', 'dev-placeholder-replace-before-deploy')

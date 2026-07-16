@@ -4,6 +4,10 @@ from django.contrib import admin
 from django.urls import path
 from core import views as core_views
 from social import oauth_views
+from social import reddit_views
+from social import youtube_views
+from social import pinterest_views
+from social import tumblr_views
 from social import views as social_views
 
 urlpatterns = [
@@ -40,6 +44,30 @@ urlpatterns = [
     path('api/oauth/facebook/callback/',           oauth_views.facebook_oauth_callback),
     path('api/oauth/facebook/status/<str:state>/', oauth_views.facebook_oauth_status),
     path('api/oauth/facebook/save/',               oauth_views.facebook_oauth_save),
+
+    # ── Reddit OAuth ─────────────────────────────────────────────────────────────
+    path('api/oauth/reddit/start/',              reddit_views.reddit_oauth_start),
+    path('api/oauth/reddit/callback/',           reddit_views.reddit_oauth_callback),
+    path('api/oauth/reddit/status/<str:state>/', reddit_views.reddit_oauth_status),
+    path('api/oauth/reddit/save/',               reddit_views.reddit_oauth_save),
+
+    # ── YouTube OAuth ────────────────────────────────────────────────────────────
+    path('api/oauth/youtube/start/',              youtube_views.youtube_oauth_start),
+    path('api/oauth/youtube/callback/',           youtube_views.youtube_oauth_callback),
+    path('api/oauth/youtube/status/<str:state>/', youtube_views.youtube_oauth_status),
+    path('api/oauth/youtube/save/',               youtube_views.youtube_oauth_save),
+
+    # ── Pinterest OAuth ──────────────────────────────────────────────────────────
+    path('api/oauth/pinterest/start/',              pinterest_views.pinterest_oauth_start),
+    path('api/oauth/pinterest/callback/',           pinterest_views.pinterest_oauth_callback),
+    path('api/oauth/pinterest/status/<str:state>/', pinterest_views.pinterest_oauth_status),
+    path('api/oauth/pinterest/save/',               pinterest_views.pinterest_oauth_save),
+
+    # ── Tumblr OAuth ─────────────────────────────────────────────────────────────
+    path('api/oauth/tumblr/start/',              tumblr_views.tumblr_oauth_start),
+    path('api/oauth/tumblr/callback/',           tumblr_views.tumblr_oauth_callback),
+    path('api/oauth/tumblr/status/<str:state>/', tumblr_views.tumblr_oauth_status),
+    path('api/oauth/tumblr/save/',               tumblr_views.tumblr_oauth_save),
 
     # ── Dashboard ────────────────────────────────────────────────────────────
     path('api/dashboard/stats/', social_views.dashboard_stats),

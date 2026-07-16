@@ -2,6 +2,7 @@ import logging
 import uuid
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.db import IntegrityError
 from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -96,7 +97,15 @@ def client_list(request):
     # POST — create a new client
     serializer = ClientSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    serializer.save(organization=org)
+    try:
+        serializer.save(organization=org)
+    except IntegrityError:
+        name = request.data.get('name', '').strip()
+        return Response(
+            {'detail': f'A client named "{name}" already exists in your organization. '
+                       f'Choose a different name (this includes deleted/archived clients).'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -115,7 +124,15 @@ def client_detail(request, client_id):
     if request.method == 'PATCH':
         serializer = ClientSerializer(client, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        try:
+            serializer.save()
+        except IntegrityError:
+            name = request.data.get('name', client.name).strip()
+            return Response(
+                {'detail': f'A client named "{name}" already exists in your organization. '
+                           f'Choose a different name (this includes deleted/archived clients).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(serializer.data)
 
     # DELETE — soft delete

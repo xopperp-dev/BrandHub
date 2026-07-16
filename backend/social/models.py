@@ -25,6 +25,10 @@ PLATFORM_CHOICES = [
     ('instagram', 'Instagram'),
     ('linkedin', 'LinkedIn'),
     ('x', 'X (Twitter)'),
+    ('reddit', 'Reddit'),
+    ('youtube', 'YouTube'),
+    ('pinterest', 'Pinterest'),
+    ('tumblr', 'Tumblr'),
 ]
 
 PLATFORM_BASE_URLS = {
@@ -32,6 +36,10 @@ PLATFORM_BASE_URLS = {
     'instagram': 'https://www.instagram.com/',
     'linkedin':  'https://www.linkedin.com/company/',
     'x':         'https://x.com/',
+    'reddit':    'https://www.reddit.com/user/',
+    'youtube':   'https://www.youtube.com/channel/',
+    'pinterest': 'https://www.pinterest.com/',
+    'tumblr':    'https://tumblr.com/',
 }
 
 
@@ -81,6 +89,11 @@ class SocialAccount(models.Model):
     # Encrypted access token
     _access_token_encrypted = models.TextField(blank=True, db_column='access_token_encrypted')
 
+    # Encrypted refresh token — needed for platforms whose access tokens expire
+    # quickly (Reddit ~1hr, YouTube/Google ~1hr). Facebook's long-lived tokens
+    # don't need this, so it's left blank for those accounts.
+    _refresh_token_encrypted = models.TextField(blank=True, db_column='refresh_token_encrypted')
+
     is_connected = models.BooleanField(default=False)
     token_expires_at = models.DateTimeField(null=True, blank=True)
     last_verified_at = models.DateTimeField(null=True, blank=True)
@@ -106,6 +119,22 @@ class SocialAccount(models.Model):
             self._access_token_encrypted = _fernet().encrypt(value.encode()).decode()
         else:
             self._access_token_encrypted = ''
+
+    @property
+    def refresh_token(self):
+        if not self._refresh_token_encrypted:
+            return None
+        try:
+            return _fernet().decrypt(self._refresh_token_encrypted.encode()).decode()
+        except Exception:
+            return None
+
+    @refresh_token.setter
+    def refresh_token(self, value):
+        if value:
+            self._refresh_token_encrypted = _fernet().encrypt(value.encode()).decode()
+        else:
+            self._refresh_token_encrypted = ''
 
     def auto_profile_url(self):
         """Derive a profile URL from the handle if profile_url is not set."""
