@@ -7,10 +7,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Security ───────────────────────────────────────────────────────────────────
 # Set these in your .env file / server environment — never hardcode in production
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-change-before-deploy')
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+SECRET_KEY = config('DJANGO_SECRET_KEY', default='django-insecure-dev-only-change-before-deploy')
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -62,15 +62,15 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 
 # ── Database ───────────────────────────────────────────────────────────────────
 # SQLite for local dev. Switch to PostgreSQL for production.
-if os.environ.get('DB_NAME'):
+if config('DB_NAME', default=None):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME':     os.environ.get('DB_NAME'),
-            'USER':     os.environ.get('DB_USER'),
-            'PASSWORD': os.environ.get('DB_PASSWORD'),
-            'HOST':     os.environ.get('DB_HOST', 'localhost'),
-            'PORT':     os.environ.get('DB_PORT', '5432'),
+            'NAME':     config('DB_NAME'),
+            'USER':     config('DB_USER'),
+            'PASSWORD': config('DB_PASSWORD'),
+            'HOST':     config('DB_HOST', default='localhost'),
+            'PORT':     config('DB_PORT', default='5432'),
         }
     }
 else:
@@ -103,7 +103,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # on a real domain — build_absolute_uri() will detect it correctly from the
 # request. Set this when testing locally through a tunnel, e.g.:
 #   PUBLIC_BASE_URL=https://abcd1234.ngrok-free.app
-PUBLIC_BASE_URL = os.environ.get('PUBLIC_BASE_URL', '')
+PUBLIC_BASE_URL = config('PUBLIC_BASE_URL', default='')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -131,7 +131,7 @@ SIMPLE_JWT = {
 }
 
 # ── CORS ───────────────────────────────────────────────────────────────────────
-_cors_env = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+_cors_env = config('CORS_ALLOWED_ORIGINS', default='')
 if _cors_env:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',')]
 else:
@@ -171,4 +171,4 @@ TUMBLR_CLIENT_SECRET = config('TUMBLR_CLIENT_SECRET', default='')
 
 # ── Token Encryption ──────────────────────────────────────────────────────────
 # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-ENCRYPTION_KEY = os.environ.get('BRANDHUB_ENCRYPTION_KEY', 'dev-placeholder-replace-before-deploy')
+ENCRYPTION_KEY = config('BRANDHUB_ENCRYPTION_KEY', default='dev-placeholder-replace-before-deploy')
