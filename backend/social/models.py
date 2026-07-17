@@ -29,6 +29,7 @@ PLATFORM_CHOICES = [
     ('youtube', 'YouTube'),
     ('pinterest', 'Pinterest'),
     ('tumblr', 'Tumblr'),
+    ('tiktok', 'TikTok'),
 ]
 
 PLATFORM_BASE_URLS = {
@@ -40,6 +41,7 @@ PLATFORM_BASE_URLS = {
     'youtube':   'https://www.youtube.com/channel/',
     'pinterest': 'https://www.pinterest.com/',
     'tumblr':    'https://tumblr.com/',
+    'tiktok':    'https://www.tiktok.com/@',
 }
 
 
