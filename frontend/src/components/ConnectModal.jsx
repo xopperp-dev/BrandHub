@@ -1,6 +1,6 @@
 // ConnectModal.jsx — drop-in replacement for the ConnectModal in Clients.jsx
-// Facebook & Instagram: OAuth popup (no manual token copy-paste)
-// LinkedIn & X: manual token (OAuth not implemented yet)
+// Facebook, Instagram, Reddit, YouTube, Pinterest, Tumblr, X: OAuth popup (no manual token copy-paste)
+// LinkedIn: manual token (OAuth not implemented yet)
 
 import { useState, useEffect, useRef } from 'react';
 import { accounts as accountsApi } from '../api/client';
@@ -303,7 +303,7 @@ function FacebookOAuthModal({ client, account, onClose, onSaved }) {
     );
 }
 
-// ── Generic single-step OAuth modal (Reddit / YouTube) ───────────────────────
+// ── Generic single-step OAuth modal (Reddit / YouTube / Pinterest / Tumblr / X) ──
 // Unlike Facebook, these platforms have no "pick a page" step — the backend's
 // <platform>_oauth_save endpoint only needs { state } and resolves the account
 // directly from the cached OAuth result.
@@ -336,6 +336,13 @@ const OAUTH_CONFIG = {
         brandColor: '#36465D',
         cta: 'Continue with Tumblr',
         description: "Click below to log in with Tumblr and authorize BrandHub to post to this account's primary blog.",
+    },
+    x: {
+        base: 'x',
+        messageType: 'X_OAUTH_DONE',
+        brandColor: '#000000',
+        cta: 'Continue with X',
+        description: "Click below to log in with X and authorize BrandHub to post on this account's behalf.",
     },
 };
 
@@ -531,7 +538,7 @@ function SimpleOAuthModal({ client, account, onClose, onSaved }) {
     );
 }
 
-// ── Manual token modal (LinkedIn / X) ────────────────────────────────────────
+// ── Manual token modal (LinkedIn only — X now uses OAuth popup above) ────────
 
 const MANUAL_HELP = {
     linkedin: {
@@ -540,13 +547,6 @@ const MANUAL_HELP = {
         tokenLabel: 'Access Token',
         profilePlaceholder: 'https://linkedin.com/company/yourco',
         help: 'From a LinkedIn app with Marketing Developer Platform enabled. Requires LinkedIn approval.',
-    },
-    x: {
-        idLabel: 'Account ID',
-        idPlaceholder: 'e.g. 1456789012345',
-        tokenLabel: 'Access Token (OAuth 2.0)',
-        profilePlaceholder: 'https://x.com/yourhandle',
-        help: 'From an X developer app with tweet.write scope. Requires paid Basic API tier.',
     },
 };
 
@@ -669,7 +669,7 @@ export default function ConnectModal({ client, account, onClose, onSaved }) {
     if (account.platform === 'facebook' || account.platform === 'instagram') {
         return <FacebookOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
     }
-    if (account.platform === 'reddit' || account.platform === 'youtube' || account.platform === 'pinterest' || account.platform === 'tumblr') {
+    if (account.platform === 'reddit' || account.platform === 'youtube' || account.platform === 'pinterest' || account.platform === 'tumblr' || account.platform === 'x') {
         return <SimpleOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
     }
     return <ManualTokenModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;

@@ -9,6 +9,7 @@ from social import youtube_views
 from social import pinterest_views
 from social import tumblr_views
 from social import views as social_views
+from social import x_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -68,6 +69,12 @@ urlpatterns = [
     path('api/oauth/tumblr/callback/',           tumblr_views.tumblr_oauth_callback),
     path('api/oauth/tumblr/status/<str:state>/', tumblr_views.tumblr_oauth_status),
     path('api/oauth/tumblr/save/',               tumblr_views.tumblr_oauth_save),
+
+    # ── X (Twitter) OAuth ────────────────────────────────────────────────────────
+    path('api/oauth/x/start/',              x_views.x_oauth_start),
+    path('api/oauth/x/callback/',           x_views.x_oauth_callback),
+    path('api/oauth/x/status/<str:state>/', x_views.x_oauth_status),
+    path('api/oauth/x/save/',               x_views.x_oauth_save),
 
     # ── Dashboard ────────────────────────────────────────────────────────────
     path('api/dashboard/stats/', social_views.dashboard_stats),
