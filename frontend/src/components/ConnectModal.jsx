@@ -1,6 +1,5 @@
 // ConnectModal.jsx — drop-in replacement for the ConnectModal in Clients.jsx
-// Facebook, Instagram, Reddit, YouTube, Pinterest, Tumblr, X: OAuth popup (no manual token copy-paste)
-// LinkedIn: manual token (OAuth not implemented yet)
+// Facebook, Instagram, Reddit, YouTube, Pinterest, Tumblr, X, LinkedIn: OAuth popup (no manual token copy-paste)
 
 import { useState, useEffect, useRef } from 'react';
 import { accounts as accountsApi } from '../api/client';
@@ -284,6 +283,236 @@ function FacebookOAuthModal({ client, account, onClose, onSaved }) {
                     )}
 
                     {/* Error */}
+                    {step === 'error' && (
+                        <div className="space-y-3">
+                            <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                                {errMsg}
+                            </div>
+                            <button onClick={() => setStep('idle')}
+                                className="w-full py-2.5 rounded-xl bg-surface-hover border border-surface-border text-sm text-slate-300 hover:text-white transition-all">
+                                Try Again
+                            </button>
+                        </div>
+                    )}
+
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── LinkedIn OAuth Modal (org picker, mirrors Facebook's page picker) ────────
+
+function LinkedInOAuthModal({ client, account, onClose, onSaved }) {
+    const [step, setStep] = useState('idle'); // idle | opening | waiting | pick_org | saving | success | error
+    const [orgs, setOrgs] = useState([]);
+    const [stateKey, setStateKey] = useState('');
+    const [errMsg, setErrMsg] = useState('');
+    const pollRef = useRef(null);
+    const popupRef = useRef(null);
+
+    const platformName = platformLabels['linkedin'];
+    const platformColor = platformColors['linkedin'];
+
+    const stopPolling = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.data?.type !== 'LINKEDIN_OAUTH_DONE') return;
+            if (!e.data.success) {
+                stopPolling();
+                setErrMsg(e.data.error || 'LinkedIn login failed.');
+                setStep('error');
+                return;
+            }
+            setStep('waiting');
+        };
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, []);
+
+    useEffect(() => {
+        if (step !== 'waiting' || !stateKey) return;
+        pollRef.current = setInterval(async () => {
+            try {
+                const res = await fetch(
+                    `/api/oauth/linkedin/status/${stateKey}/`,
+                    { headers: { Authorization: `Bearer ${localStorage.getItem('bh_access')}` } }
+                );
+                const data = await res.json();
+                if (data.pending) return;
+                stopPolling();
+                if (data.success) {
+                    setOrgs(data.orgs || []);
+                    setStep('pick_org');
+                } else {
+                    setErrMsg(data.error || 'Something went wrong.');
+                    setStep('error');
+                }
+            } catch {
+                stopPolling();
+                setErrMsg('Could not check OAuth status.');
+                setStep('error');
+            }
+        }, 1500);
+        return stopPolling;
+    }, [step, stateKey]);
+
+    const handleStart = async () => {
+        setStep('opening');
+        setErrMsg('');
+        try {
+            const res = await fetch(
+                `/api/oauth/linkedin/start/?client_id=${client.id}&account_id=${account.id}`,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('bh_access')}` } }
+            );
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to start OAuth.');
+
+            setStateKey(data.state);
+
+            const w = 600, h = 700;
+            const left = window.screenX + (window.outerWidth - w) / 2;
+            const top = window.screenY + (window.outerHeight - h) / 2;
+            popupRef.current = window.open(
+                data.oauth_url,
+                'linkedin_oauth',
+                `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`
+            );
+
+            setStep('waiting');
+        } catch (e) {
+            setErrMsg(e.message || 'Could not start LinkedIn login.');
+            setStep('error');
+        }
+    };
+
+    const handleOrgSelect = async (org) => {
+        setStep('saving');
+        try {
+            const res = await fetch('/api/oauth/linkedin/save/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('bh_access')}`,
+                },
+                body: JSON.stringify({
+                    state: stateKey,
+                    org_id: org.id,
+                    org_name: org.name,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to save.');
+            setStep('success');
+            setTimeout(() => { onSaved(data.account); onClose(); }, 1500);
+        } catch (e) {
+            setErrMsg(e.message);
+            setStep('error');
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-sm shadow-2xl">
+
+                <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                            style={{ background: platformColor + '22' }}>
+                            <PlatformIcon platform="linkedin" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-white">Connect {platformName}</p>
+                            <p className="text-xs text-slate-500">{client.name}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-surface-hover transition-all">
+                        <X size={15} />
+                    </button>
+                </div>
+
+                <div className="p-5">
+
+                    {step === 'idle' && (
+                        <div className="space-y-4">
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                                Click below to log in with LinkedIn. You'll be asked to choose which Company Page to connect.
+                                <span className="block mt-1 text-[11px] text-slate-500">
+                                    Requires the connecting account to be an admin of the LinkedIn Company Page, and the app must have Marketing Developer Platform access approved.
+                                </span>
+                            </p>
+                            <button
+                                onClick={handleStart}
+                                className="w-full py-2.5 rounded-xl font-semibold text-sm text-white transition-all flex items-center justify-center gap-2"
+                                style={{ background: '#0A66C2' }}
+                            >
+                                Continue with LinkedIn
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'opening' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <Loader2 size={22} className="text-brand-400 animate-spin" />
+                            <p className="text-sm text-white">Opening LinkedIn login…</p>
+                        </div>
+                    )}
+
+                    {step === 'waiting' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <Loader2 size={22} className="text-brand-400 animate-spin" />
+                            <p className="text-sm text-white">Waiting for LinkedIn login…</p>
+                            <p className="text-xs text-slate-500">Complete the login in the popup window</p>
+                            <button onClick={() => { stopPolling(); setStep('idle'); }}
+                                className="text-xs text-slate-600 hover:text-slate-400 mt-1">Cancel</button>
+                        </div>
+                    )}
+
+                    {step === 'pick_org' && (
+                        <div className="space-y-3">
+                            <p className="text-xs text-slate-400 font-medium">Select a Company Page to connect:</p>
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                                {orgs.map(org => (
+                                    <button
+                                        key={org.id}
+                                        onClick={() => handleOrgSelect(org)}
+                                        className="w-full flex items-center justify-between p-3 rounded-xl bg-surface-hover border border-surface-border hover:border-brand-500/50 hover:bg-brand-600/5 transition-all text-left"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center">
+                                                <PlatformIcon platform="linkedin" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-white font-medium">{org.name}</p>
+                                                <p className="text-[10px] text-slate-500">ID: {org.id}</p>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={14} className="text-slate-500" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'saving' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <Loader2 size={22} className="text-brand-400 animate-spin" />
+                            <p className="text-sm text-white">Saving…</p>
+                        </div>
+                    )}
+
+                    {step === 'success' && (
+                        <div className="py-8 flex flex-col items-center gap-3">
+                            <CheckCircle2 size={26} className="text-emerald-400" />
+                            <p className="text-sm text-white font-medium">Connected!</p>
+                        </div>
+                    )}
+
                     {step === 'error' && (
                         <div className="space-y-3">
                             <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
@@ -668,6 +897,9 @@ function ManualTokenModal({ client, account, onClose, onSaved }) {
 export default function ConnectModal({ client, account, onClose, onSaved }) {
     if (account.platform === 'facebook' || account.platform === 'instagram') {
         return <FacebookOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
+    }
+    if (account.platform === 'linkedin') {
+        return <LinkedInOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
     }
     if (account.platform === 'reddit' || account.platform === 'youtube' || account.platform === 'pinterest' || account.platform === 'tumblr' || account.platform === 'x') {
         return <SimpleOAuthModal client={client} account={account} onClose={onClose} onSaved={onSaved} />;
