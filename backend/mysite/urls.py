@@ -8,9 +8,9 @@ from social import reddit_views
 from social import youtube_views
 from social import pinterest_views
 from social import tumblr_views
+from social import tiktok_views
 from social import views as social_views
 from social import x_views
-from social import linkedin_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -77,12 +77,11 @@ urlpatterns = [
     path('api/oauth/x/status/<str:state>/', x_views.x_oauth_status),
     path('api/oauth/x/save/',               x_views.x_oauth_save),
 
-    # ── LinkedIn OAuth ───────────────────────────────────────────────────────────
-    path('api/oauth/linkedin/start/',              linkedin_views.linkedin_oauth_start),
-    path('api/oauth/linkedin/callback/',           linkedin_views.linkedin_oauth_callback),
-    path('api/oauth/linkedin/status/<str:state>/', linkedin_views.linkedin_oauth_status),
-    path('api/oauth/linkedin/save/',               linkedin_views.linkedin_oauth_save),
-
+    # ── TikTok OAuth ─────────────────────────────────────────────────────────────
+    path('api/oauth/tiktok/start/',              tiktok_views.tiktok_oauth_start),
+    path('api/oauth/tiktok/callback/',           tiktok_views.tiktok_oauth_callback),
+    path('api/oauth/tiktok/status/<str:state>/', tiktok_views.tiktok_oauth_status),
+    path('api/oauth/tiktok/save/',               tiktok_views.tiktok_oauth_save),
 
     # ── Dashboard ────────────────────────────────────────────────────────────
     path('api/dashboard/stats/', social_views.dashboard_stats),

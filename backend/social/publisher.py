@@ -78,6 +78,17 @@ def _publish_x(account: SocialAccount, content: str) -> tuple[str, int, str]:
     return '', 0, 'SKIP:X (Twitter) publishing is not implemented yet.'
 
 
+def _publish_tiktok(account: SocialAccount, content: str) -> tuple[str, int, str]:
+    """Placeholder — TikTok publishing not yet implemented.
+
+    TikTok's Content Posting API requires video (not text/image) content and
+    a separate app audit before it can post outside sandbox mode, so this is
+    left as a connect-only integration for now, same as Reddit/YouTube/
+    Pinterest/Tumblr above.
+    """
+    return '', 0, 'SKIP:TikTok publishing is not implemented yet.'
+
+
 def publish_post(post: Post, account_ids: list, image_url: str = None) -> Post:
     """
     Publish `post` to all SocialAccounts in `account_ids`.
@@ -114,6 +125,8 @@ def publish_post(post: Post, account_ids: list, image_url: str = None) -> Post:
                 pid, reach, err = _publish_linkedin(account, post.content)
             elif account.platform == 'x':
                 pid, reach, err = _publish_x(account, post.content)
+            elif account.platform == 'tiktok':
+                pid, reach, err = _publish_tiktok(account, post.content)
             else:
                 dist.status = 'skipped'
                 dist.error_message = f'{account.platform} publishing not supported.'

@@ -17,6 +17,7 @@ const platformLabels = {
   reddit: 'Reddit',
   pinterest: 'Pinterest',
   tumblr: 'Tumblr',
+  tiktok: 'TikTok',
 };
 
 const platformColors = {
@@ -28,6 +29,7 @@ const platformColors = {
   reddit: '#FF4500',
   pinterest: '#E60023',
   tumblr: '#36465D',
+  tiktok: '#EE1D52',
 };
 
 // Modal: Disconnect confirmation
