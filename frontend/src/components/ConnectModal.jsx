@@ -79,8 +79,21 @@ function FacebookOAuthModal({ client, account, onClose, onSaved }) {
                 if (data.pending) return;
                 stopPolling();
                 if (data.success) {
-                    setPages(data.pages || []);
-                    setStep('pick_page');
+                    if (data.auto_saved && data.account) {
+                        // Single Page — already connected server-side, same
+                        // one-click UX as X/YouTube. Skip the picker entirely.
+                        if (data.ig_connected) setIgSaved(data.ig_connected);
+                        setStep('success');
+                        setTimeout(() => {
+                            onSaved(data.account);
+                            if (data.ig_connected) onSaved(data.ig_connected);
+                            onClose();
+                        }, 1500);
+                    } else {
+                        // Multiple Pages — can't auto-decide, show picker.
+                        setPages(data.pages || []);
+                        setStep('pick_page');
+                    }
                 } else {
                     setErrMsg(data.error || 'Something went wrong.');
                     setStep('error');
@@ -193,7 +206,7 @@ function FacebookOAuthModal({ client, account, onClose, onSaved }) {
                     {step === 'idle' && (
                         <div className="space-y-4">
                             <p className="text-sm text-slate-400 leading-relaxed">
-                                Click below to log in with Facebook. You'll be asked to choose which Pages to connect.
+                                Click below to log in with Facebook. If you manage more than one Page, you'll be asked which one to connect — otherwise it connects automatically.
                                 {account.platform === 'instagram' && (
                                     <span className="block mt-1 text-[11px] text-slate-500">
                                         Instagram will also be connected automatically if your IG account is linked to a Facebook Page.

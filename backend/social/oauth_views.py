@@ -6,8 +6,17 @@ Flow:
   3. Frontend opens popup to that URL
   4. User logs in & grants permissions on Facebook
   5. Facebook redirects to /api/oauth/facebook/callback/?code=...&state=...
-  6. Backend exchanges code for token, fetches pages, saves to DB
-  7. Popup closes, frontend polls /api/oauth/facebook/status/<state>/ → gets result
+  6. Backend exchanges code for token, fetches pages.
+     - If the user manages exactly ONE Page, the backend auto-selects and
+       saves it immediately (same single-click UX as X/YouTube — no picker
+       screen shown).
+     - If the user manages MULTIPLE Pages, the backend returns the list and
+       the frontend shows a picker (there's no way to auto-decide which
+       Page an agency wants in that case).
+  7. Popup closes, frontend polls /api/oauth/facebook/status/<state>/ → gets
+     result. If `account` is present, it's already connected — done. If
+     `pages` is present instead, frontend shows the picker and calls
+     /api/oauth/facebook/save/ with the chosen page.
 """
 
 import uuid
@@ -98,6 +107,64 @@ def facebook_oauth_start(request):
     return Response({"oauth_url": url, "state": state})
 
 
+# ── Shared: resolve a page's never-expiring token + linked IG, save to DB ────
+
+def _save_facebook_page(state_data, org, chosen_page_id, page_access_token):
+    """
+    Given a chosen Page (id + short-lived page token), fetches the
+    never-expiring page token, saves the account, and auto-connects any
+    linked Instagram Business Account. Returns (account, ig_connected).
+    Raises Exception on failure.
+    """
+    account = SocialAccount.objects.get(
+        id=state_data["account_id"],
+        client__id=state_data["client_id"],
+        client__organization=org,
+    )
+
+    # Get never-expiring page token
+    never_expire_res = requests.get(f"{GRAPH}/{chosen_page_id}", params={
+        "fields":       "access_token,name,fan_count,picture",
+        "access_token": page_access_token,
+    }, timeout=10).json()
+
+    never_expire_token = never_expire_res.get("access_token", page_access_token)
+    page_name = never_expire_res.get("name", "")
+
+    # Also check for linked Instagram Business Account
+    ig_res = requests.get(f"{GRAPH}/{chosen_page_id}", params={
+        "fields":       "instagram_business_account",
+        "access_token": never_expire_token,
+    }, timeout=10).json()
+    ig_id = ig_res.get("instagram_business_account", {}).get("id", "")
+
+    # Save Facebook account
+    account.page_id      = chosen_page_id
+    account.handle        = page_name
+    account.access_token  = never_expire_token
+    account.is_connected  = True
+    account.profile_url   = f"https://www.facebook.com/{chosen_page_id}"
+    account.save()
+
+    # Auto-connect Instagram account if found
+    ig_connected = None
+    if ig_id:
+        try:
+            ig_account = SocialAccount.objects.get(
+                client=account.client, platform="instagram"
+            )
+            ig_account.page_id      = ig_id
+            ig_account.handle       = page_name
+            ig_account.access_token = never_expire_token
+            ig_account.is_connected = True
+            ig_account.save()
+            ig_connected = SocialAccountSerializer(ig_account).data
+        except SocialAccount.DoesNotExist:
+            pass
+
+    return account, ig_connected
+
+
 # ── Step 2: Callback (Facebook redirects here) ────────────────────────────────
 
 @api_view(["GET"])
@@ -105,7 +172,9 @@ def facebook_oauth_start(request):
 def facebook_oauth_callback(request):
     """
     Facebook redirects here after user grants permission.
-    Exchanges code → token, fetches pages, saves to DB, stores result in cache.
+    Exchanges code → token, fetches pages.
+    Single-page accounts auto-save immediately (same UX as X/YouTube).
+    Multi-page accounts store the list for the frontend picker.
     """
     code  = request.query_params.get("code")
     state = request.query_params.get("state")
@@ -155,13 +224,33 @@ def facebook_oauth_callback(request):
         if not pages:
             raise Exception("No Facebook Pages found for this account. Make sure you manage at least one Page.")
 
-        # Store result in cache for frontend to poll
-        cache.set(f"oauth_result:{state}", {
-            "success":    True,
-            "state_data": state_data,
-            "pages":      pages,
-            "long_token": long_token,
-        }, timeout=300)
+        if len(pages) == 1:
+            # Single Page — auto-connect immediately, same single-click UX as X/YouTube.
+            page = pages[0]
+            org = None
+            try:
+                from core.models import User  # local import to avoid circulars
+                org = User.objects.get(id=state_data["user_id"]).organization
+            except Exception:
+                pass
+            account, ig_connected = _save_facebook_page(
+                state_data, org, page["id"], page["access_token"]
+            )
+            cache.set(f"oauth_result:{state}", {
+                "success":      True,
+                "auto_saved":   True,
+                "account":      SocialAccountSerializer(account).data,
+                "ig_connected": ig_connected,
+            }, timeout=300)
+        else:
+            # Multiple Pages — can't auto-decide, fall back to picker.
+            cache.set(f"oauth_result:{state}", {
+                "success":    True,
+                "auto_saved": False,
+                "state_data": state_data,
+                "pages":      pages,
+                "long_token": long_token,
+            }, timeout=300)
 
         return _popup_close_html(success=True)
 
@@ -182,14 +271,15 @@ def _popup_close_html(success, error=""):
     return HttpResponse(html)
 
 
-# ── Step 3: Status poll + page select ─────────────────────────────────────────
+# ── Step 3: Status poll ────────────────────────────────────────────────────────
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def facebook_oauth_status(request, state):
     """
     Frontend polls this after popup closes.
-    Returns {success, pages} so frontend can show page picker.
+    Returns either { account, ig_connected } if auto-saved (single Page),
+    or { pages } so the frontend can show a picker (multiple Pages).
     """
     result = cache.get(f"oauth_result:{state}")
     if result is None:
@@ -197,15 +287,15 @@ def facebook_oauth_status(request, state):
     return Response(result)
 
 
-# ── Step 4: Save chosen page to DB ────────────────────────────────────────────
+# ── Step 4: Save chosen page to DB (only used for multi-page fallback) ───────
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def facebook_oauth_save(request):
     """
-    Frontend sends the chosen page + state.
-    Body: { state, page_id, page_name, page_access_token }
-    Fetches never-expiring page token and saves to DB.
+    Frontend sends the chosen page + state (only reached when the user
+    manages multiple Pages and picked one from the picker).
+    Body: { state, page_id, page_access_token }
     """
     state             = request.data.get("state")
     chosen_page_id    = request.data.get("page_id")
@@ -219,8 +309,8 @@ def facebook_oauth_save(request):
 
     # Verify ownership again
     try:
-        org     = request.user.organization
-        account = SocialAccount.objects.get(
+        org = request.user.organization
+        SocialAccount.objects.get(
             id=state_data["account_id"],
             client__id=state_data["client_id"],
             client__organization=org,
@@ -229,45 +319,9 @@ def facebook_oauth_save(request):
         return Response({"detail": "Account not found."}, status=404)
 
     try:
-        # Get never-expiring page token
-        never_expire_res = requests.get(f"{GRAPH}/{chosen_page_id}", params={
-            "fields":       "access_token,name,fan_count,picture",
-            "access_token": page_access_token,
-        }, timeout=10).json()
-
-        never_expire_token = never_expire_res.get("access_token", page_access_token)
-        page_name = never_expire_res.get("name", "")
-
-        # Also check for linked Instagram Business Account
-        ig_res = requests.get(f"{GRAPH}/{chosen_page_id}", params={
-            "fields":       "instagram_business_account",
-            "access_token": never_expire_token,
-        }, timeout=10).json()
-        ig_id = ig_res.get("instagram_business_account", {}).get("id", "")
-
-        # Save Facebook account
-        account.page_id      = chosen_page_id
-        account.handle       = page_name
-        account.access_token = never_expire_token
-        account.is_connected = True
-        account.profile_url  = f"https://www.facebook.com/{chosen_page_id}"
-        account.save()
-
-        # Auto-connect Instagram account if found
-        ig_connected = None
-        if ig_id:
-            try:
-                ig_account = SocialAccount.objects.get(
-                    client=account.client, platform="instagram"
-                )
-                ig_account.page_id      = ig_id
-                ig_account.handle       = page_name
-                ig_account.access_token = never_expire_token
-                ig_account.is_connected = True
-                ig_account.save()
-                ig_connected = SocialAccountSerializer(ig_account).data
-            except SocialAccount.DoesNotExist:
-                pass
+        account, ig_connected = _save_facebook_page(
+            state_data, org, chosen_page_id, page_access_token
+        )
 
         cache.delete(f"oauth_result:{state}")
         cache.delete(f"oauth_state:{state}")
