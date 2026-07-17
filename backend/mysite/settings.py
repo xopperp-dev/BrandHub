@@ -173,6 +173,13 @@ TUMBLR_CLIENT_SECRET = config('TUMBLR_CLIENT_SECRET', default='')
 X_CLIENT_ID     = config('X_CLIENT_ID', default='')
 X_CLIENT_SECRET = config('X_CLIENT_SECRET', default='')
 
+# ── LinkedIn OAuth ─────────────────────────────────────────────────────────────
+# Create at: https://www.linkedin.com/developers/apps
+# Requires the "Marketing Developer Platform" product (LinkedIn approval
+# needed) for w_organization_social / r_organization_social scopes.
+LINKEDIN_CLIENT_ID     = config('LINKEDIN_CLIENT_ID', default='')
+LINKEDIN_CLIENT_SECRET = config('LINKEDIN_CLIENT_SECRET', default='')
+
 # ── Token Encryption ──────────────────────────────────────────────────────────
 # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY = config('BRANDHUB_ENCRYPTION_KEY', default='dev-placeholder-replace-before-deploy')
