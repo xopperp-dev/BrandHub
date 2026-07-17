@@ -169,6 +169,10 @@ PINTEREST_CLIENT_SECRET = config('PINTEREST_CLIENT_SECRET', default='')
 TUMBLR_CLIENT_ID     = config('TUMBLR_CLIENT_ID', default='')
 TUMBLR_CLIENT_SECRET = config('TUMBLR_CLIENT_SECRET', default='')
 
+# ── X (Twitter) OAuth ──────────────────────────────────────────────────────────
+X_CLIENT_ID     = config('X_CLIENT_ID', default='')
+X_CLIENT_SECRET = config('X_CLIENT_SECRET', default='')
+
 # ── Token Encryption ──────────────────────────────────────────────────────────
 # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY = config('BRANDHUB_ENCRYPTION_KEY', default='dev-placeholder-replace-before-deploy')
