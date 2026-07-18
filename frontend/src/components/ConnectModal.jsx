@@ -173,7 +173,20 @@ function SimpleOAuthModal({ client, account, onClose, onSaved }) {
     // Poll status after popup closes
     useEffect(() => {
         if (step !== 'waiting' || !stateKey) return;
+        const startedAt = Date.now();
+        const POLL_TIMEOUT_MS = 90_000; // stop after 90s of no resolution
+
         pollRef.current = setInterval(async () => {
+            if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+                stopPolling();
+                setErrMsg(
+                    `Taking longer than expected. This can happen if the login popup was closed, ` +
+                    `blocked, or if ${platformName} isn't reachable from your current network/region. ` +
+                    `Check your connection and try again.`
+                );
+                setStep('error');
+                return;
+            }
             try {
                 const res = await fetch(
                     `/api/oauth/${cfg.base}/status/${stateKey}/`,
