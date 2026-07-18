@@ -1,6 +1,7 @@
 // ConnectModal.jsx — drop-in replacement for the ConnectModal in Clients.jsx
-// Facebook, Instagram, Reddit, YouTube, Pinterest, Tumblr, X, TikTok: OAuth popup (no manual token copy-paste)
-// LinkedIn: manual token (OAuth not implemented yet)
+// Facebook, Instagram, Reddit, YouTube, Pinterest, Tumblr, X, TikTok, LinkedIn:
+// OAuth popup (no manual token copy-paste). LinkedIn has one extra step —
+// after login, the user picks which Company Page to connect from a list.
 
 import { useState, useEffect, useRef } from 'react';
 import { accounts as accountsApi } from '../api/client';
@@ -97,17 +98,26 @@ const OAUTH_CONFIG = {
         cta: 'Continue with TikTok',
         description: "Click below to log in with TikTok and authorize BrandHub to access this account.",
     },
+    linkedin: {
+        base: 'linkedin',
+        messageType: 'LINKEDIN_OAUTH_DONE',
+        brandColor: '#0A66C2',
+        cta: 'Continue with LinkedIn',
+        description: "Click below to log in with LinkedIn and authorize BrandHub. You'll then pick which Company Page to connect.",
+    },
 };
 
 function SimpleOAuthModal({ client, account, onClose, onSaved }) {
-    const [step, setStep] = useState('idle'); // idle | opening | waiting | saving | success | error
+    const [step, setStep] = useState('idle'); // idle | opening | waiting | picking | saving | success | error
     const [stateKey, setStateKey] = useState('');
     const [errMsg, setErrMsg] = useState('');
     const [igConnected, setIgConnected] = useState(null);
+    const [orgs, setOrgs] = useState([]); // LinkedIn only: orgs to pick from
     const pollRef = useRef(null);
     const popupRef = useRef(null);
 
     const cfg = OAUTH_CONFIG[account.platform];
+    const isLinkedIn = account.platform === 'linkedin';
     const platformName = platformLabels[account.platform];
     const platformColor = platformColors[account.platform];
 
@@ -115,16 +125,19 @@ function SimpleOAuthModal({ client, account, onClose, onSaved }) {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     };
 
-    const saveAccount = async (finishedState) => {
+    const saveAccount = async (finishedState, org) => {
         setStep('saving');
         try {
+            const body = isLinkedIn
+                ? { state: finishedState, org_id: org.id, org_name: org.name }
+                : { state: finishedState };
             const res = await fetch(`/api/oauth/${cfg.base}/save/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${localStorage.getItem('bh_access')}`,
                 },
-                body: JSON.stringify({ state: finishedState }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Failed to save.');
@@ -170,7 +183,17 @@ function SimpleOAuthModal({ client, account, onClose, onSaved }) {
                 if (data.pending) return;
                 stopPolling();
                 if (data.success) {
-                    saveAccount(stateKey);
+                    if (isLinkedIn) {
+                        if (!data.orgs || data.orgs.length === 0) {
+                            setErrMsg('No LinkedIn Company Pages found for this account.');
+                            setStep('error');
+                            return;
+                        }
+                        setOrgs(data.orgs);
+                        setStep('picking');
+                    } else {
+                        saveAccount(stateKey);
+                    }
                 } else {
                     setErrMsg(data.error || 'Something went wrong.');
                     setStep('error');
@@ -265,6 +288,23 @@ function SimpleOAuthModal({ client, account, onClose, onSaved }) {
                         </div>
                     )}
 
+                    {step === 'picking' && (
+                        <div className="space-y-3">
+                            <p className="text-sm text-slate-400">Choose which Company Page to connect:</p>
+                            <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                                {orgs.map((org) => (
+                                    <button
+                                        key={org.id}
+                                        onClick={() => saveAccount(stateKey, org)}
+                                        className="w-full text-left px-3.5 py-2.5 rounded-xl bg-surface-hover border border-surface-border hover:border-brand-500/60 text-sm text-slate-200 transition-all"
+                                    >
+                                        {org.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {step === 'saving' && (
                         <div className="py-8 flex flex-col items-center gap-3">
                             <Loader2 size={22} className="text-brand-400 animate-spin" />
@@ -300,17 +340,9 @@ function SimpleOAuthModal({ client, account, onClose, onSaved }) {
     );
 }
 
-// ── Manual token modal (LinkedIn only — X now uses OAuth popup above) ────────
+// ── Manual token modal (fallback for any platform not in OAUTH_CONFIG) ───────
 
-const MANUAL_HELP = {
-    linkedin: {
-        idLabel: 'Organization ID',
-        idPlaceholder: 'e.g. 90123456',
-        tokenLabel: 'Access Token',
-        profilePlaceholder: 'https://linkedin.com/company/yourco',
-        help: 'From a LinkedIn app with Marketing Developer Platform enabled. Requires LinkedIn approval.',
-    },
-};
+const MANUAL_HELP = {};
 
 function ManualTokenModal({ client, account, onClose, onSaved }) {
     const cfg = MANUAL_HELP[account.platform];
